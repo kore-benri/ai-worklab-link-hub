@@ -9,7 +9,7 @@ const seed: LinkItem[] = [
 ];
 
 export default function Home() {
-  const [links, setLinks] = useState<LinkItem[]>([]);
+  const [links, setLinks] = useState<LinkItem[]>(seed);
   const [product, setProduct] = useState('ZENCHORD 1');
   const [channel, setChannel] = useState('X');
   const [label, setLabel] = useState('');
@@ -17,7 +17,13 @@ export default function Home() {
 
   useEffect(() => {
     const saved = localStorage.getItem('awl-links');
-    setLinks(saved ? JSON.parse(saved) : seed);
+    const base: LinkItem[] = saved ? JSON.parse(saved) : seed;
+    setLinks(base);
+
+    fetch('/api/clicks', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => setLinks(current => current.map(x => ({ ...x, clicks: Number(data.clicks?.[x.id] ?? x.clicks) }))))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -25,6 +31,7 @@ export default function Home() {
   }, [links]);
 
   const total = useMemo(() => links.reduce((n, x) => n + x.clicks, 0), [links]);
+  const ranked = useMemo(() => [...links].sort((a,b)=>b.clicks-a.clicks), [links]);
 
   function addLink(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +51,7 @@ export default function Home() {
     <section className="stats">
       <article><span>TRACKING LINKS</span><strong>{links.length}</strong></article>
       <article><span>TOTAL CLICKS</span><strong>{total}</strong></article>
-      <article><span>TOP PRODUCT</span><strong className="small">{links[0]?.product ?? '—'}</strong></article>
+      <article><span>TOP PRODUCT</span><strong className="small">{ranked[0]?.product ?? '—'}</strong></article>
     </section>
 
     <section className="panel">
@@ -62,7 +69,7 @@ export default function Home() {
       <div className="panelTitle"><div><span className="eyebrow">PERFORMANCE</span><h2>クリックランキング</h2></div><span className="muted">まずは「商品 × 訴求」だけを見る</span></div>
       <div className="table">
         {links.length === 0 && <div className="empty">まだリンクがありません。</div>}
-        {[...links].sort((a,b)=>b.clicks-a.clicks).map((x,i)=><div className="row" key={x.id}>
+        {ranked.map((x,i)=><div className="row" key={x.id}>
           <div className="rank">{String(i+1).padStart(2,'0')}</div>
           <div className="info"><strong>{x.product}</strong><span>{x.channel} · {x.label}</span><code>/go/{x.id}</code></div>
           <div className="clicks"><strong>{x.clicks}</strong><span>clicks</span></div>
@@ -71,6 +78,6 @@ export default function Home() {
       </div>
     </section>
 
-    <footer>AI WorkLab Link Hub · DBなしで始めるGrowth Tracking</footer>
+    <footer>AI WorkLab Link Hub · 軽量カウンターで始めるGrowth Tracking</footer>
   </main>;
 }
