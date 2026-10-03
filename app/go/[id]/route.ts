@@ -5,11 +5,17 @@ const destinations: Record<string, string> = {
   'zenchord-x-001': 'https://r.8to.jp/kmGDcbmtBuVL',
 };
 
-function getRedis() {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) throw new Error('Upstash KV environment variables are not configured');
-  return new Redis({ url, token });
+function redisClient() {
+  return new Redis({
+    url: process.env.KV_REST_API_URL!,
+    token: process.env.KV_REST_API_TOKEN!,
+  });
+}
+
+function tokyoDate() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -17,9 +23,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const destination = destinations[id];
   if (!destination) return NextResponse.redirect(new URL('/', request.url));
 
-  // Click counting must never block the affiliate redirect.
   try {
-    await getRedis().incr(`clicks:${id}`);
+    const redis = redisClient();
+    const dayKey = `clicks:${id}:day:${tokyoDate()}`;
+    await Promise.all([
+      redis.incr(`clicks:${id}`),
+      redis.incr(dayKey),
+      redis.expire(dayKey, 60 * 60 * 24 * 45),
+    ]);
   } catch (error) {
     console.error('click counter failed', error);
   }
